@@ -24,3 +24,5 @@ tests/.coverage
 
 # log files
 *.log
+
+pyvenv

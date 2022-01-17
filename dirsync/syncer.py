@@ -21,9 +21,46 @@ import shutil
 import re
 import logging
 import filecmp
+import subprocess
 
 from .options import OPTIONS
 from .version import __pkg_name__
+
+
+def os_get(dirpath):
+    cmd_output = subprocess.run(["ls", "-a", dirpath], capture_output=True)
+    list_files = cmd_output.stdout.decode().split('\n')
+    files = []
+    dirs = []
+    for f in list_files:
+        if f not in [".", "..", ""]:
+            fullpath = os.path.join(dirpath, f)
+            if os.path.isdir(fullpath):
+                dirs.append(f)
+            else:
+                files.append(f)
+    return dirpath, dirs, files
+
+
+def os_walk_r(dirpath, entries):
+    (dirpath, dirs, files) = os_get(dirpath)
+    entries.append((dirpath, dirs, files))
+    for d in dirs:
+        os_walk_r(os.path.join(dirpath, d), entries)
+
+
+def os_walk(dir, use_os=False):
+    """Allows a dirty implementation relying on executing 'ls' command rather than the typical os.walk.
+    This is to support some mounted custom filesystem like Fuse (e.g. amazon workdocs) that don't fully implement
+    all bindings and readir() or othe syscalls won't work.
+    This is really dirty and can be quite slow for deep file trees
+    """
+    if use_os:
+        return os.walk(dir)
+    else:
+        entries = []
+        os_walk_r(dir, entries)
+        return entries
 
 
 class DCMP(object):
@@ -124,7 +161,7 @@ class Syncer(object):
 
         excl_patterns = set(self._exclude).union(self._ignore)
 
-        for cwd, dirs, files in os.walk(dir1):
+        for cwd, dirs, files in os_walk(dir1):
             self._numdirs += len(dirs)
             for f in dirs + files:
                 path = os.path.relpath(os.path.join(cwd, f), dir1)
@@ -164,7 +201,7 @@ class Syncer(object):
                         anc_dirs_path = os.path.join(anc_dirs_path, ad)
                         left.add(anc_dirs_path)
 
-        for cwd, dirs, files in os.walk(dir2):
+        for cwd, dirs, files in os_walk(dir2):
             for f in dirs + files:
                 path = os.path.relpath(os.path.join(cwd, f), dir2)
                 re_path = path.replace('\\', '/')
