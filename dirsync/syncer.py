@@ -558,7 +558,6 @@ class Syncer(object):
         self._copyfiles = True
         self._updatefiles = True
         self._creatdirs = True
-        self._copydirection = 0
 
         if self._verbose:
             self.log('Synchronizing directory %s with %s' %
