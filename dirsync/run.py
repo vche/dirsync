@@ -8,6 +8,7 @@ import sys
 import os
 
 from .syncer import Syncer
+from .version import __version__
 
 
 def sync(sourcedir, targetdir, action, **options):

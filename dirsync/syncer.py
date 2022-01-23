@@ -65,6 +65,7 @@ def os_walk(dir, use_os=False):
 
 class DCMP(object):
     """Dummy object for directory comparison data storage"""
+
     def __init__(self, l, r, c):
         self.left_only = l
         self.right_only = r
@@ -84,7 +85,8 @@ class Syncer(object):
             log.setLevel(logging.INFO)
             if not log.handlers:
                 hdl = logging.StreamHandler(sys.stdout)
-                hdl.setFormatter(logging.Formatter('%(message)s'))
+                hdl.setFormatter(logging.Formatter(
+                    '[%(asctime)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S'))
                 log.addHandler(hdl)
             self.logger = log
 
@@ -141,7 +143,8 @@ class Syncer(object):
         self._exclude.append('^\.dirsync$')
 
         if not os.path.isdir(self._dir1):
-            raise ValueError("Error: Source directory does not exist.")
+            raise ValueError(
+                f"Error: Source directory '{self._dir1}' does not exist.")
 
         if not self._maketarget and not os.path.isdir(self._dir2):
             raise ValueError(
@@ -252,6 +255,7 @@ class Syncer(object):
         self._dcmp = self._compare(dir1, dir2)
 
         # Files & directories only in target directory
+        self.log(f"purge {self._purge} + {self._copydirection}")
         if self._purge:
             for f2 in self._dcmp.right_only:
                 fullf2 = os.path.join(self._dir2, f2)
@@ -262,7 +266,7 @@ class Syncer(object):
                         try:
                             try:
                                 os.remove(fullf2)
-                            except PermissionError as e:
+                            except PermissionError:
                                 os.chmod(fullf2, stat.S_IWRITE)
                                 os.remove(fullf2)
                             self._deleted.append(fullf2)
@@ -282,6 +286,24 @@ class Syncer(object):
                 except Exception as e:  # of any use ?
                     self.log(str(e))
                     continue
+        # If purge not selected, add new files in target dir the source
+        elif self._copydirection == 1 or self._copydirection == 2:
+            for f2 in self._dcmp.right_only:
+                try:
+                    st = os.stat(os.path.join(self._dir2, f2))
+                except os.error:
+                    continue
+
+                if stat.S_ISREG(st.st_mode):
+                    if copyfunc:
+                        copyfunc(f2, self._dir2, self._dir1)
+                        self._added.append(os.path.join(self._dir1, f2))
+                elif stat.S_ISDIR(st.st_mode):
+                    to_make = os.path.join(self._dir1, f2)
+                    if not os.path.exists(to_make):
+                        os.makedirs(to_make)
+                        self._numnewdirs += 1
+                        self._added.append(to_make)
 
         # Files & directories only in source directory
         for f1 in self._dcmp.left_only:
@@ -404,7 +426,7 @@ class Syncer(object):
         mtime_cmp = int((filest1.st_mtime - filest2.st_mtime) * 1000) > 0
         if self._use_ctime:
             return mtime_cmp or \
-                   int((filest1.st_ctime - filest2.st_mtime) * 1000) > 0
+                int((filest1.st_ctime - filest2.st_mtime) * 1000) > 0
         else:
             return mtime_cmp
 
@@ -435,7 +457,8 @@ class Syncer(object):
                 # source file's modification time, or creation time. Sometimes
                 # it so happens that a file's creation time is newer than it's
                 # modification time! (Seen this on windows)
-                need_upd = (not filecmp.cmp(file1, file2, False)) if self._use_content else self._cmptimestamps(st1, st2)
+                need_upd = (not filecmp.cmp(file1, file2, False)
+                            ) if self._use_content else self._cmptimestamps(st1, st2)
                 if need_upd:
                     if self._verbose:
                         # source to target
@@ -449,7 +472,10 @@ class Syncer(object):
                                 os.symlink(os.readlink(file1), file2)
                             else:
                                 try:
+                                    st1init = os.stat(file1)
                                     shutil.copy2(file1, file2)
+                                    os.utime(
+                                        file1, (int(st1init.st_atime), int(st1init.st_mtime)))
                                 except PermissionError as e:
                                     os.chmod(file2, stat.S_IWRITE)
                                     shutil.copy2(file1, file2)
@@ -475,7 +501,8 @@ class Syncer(object):
                 # source file's modification time, or creation time. Sometimes
                 # it so happens that a file's creation time is newer than it's
                 # modification time! (Seen this on windows)
-                need_upd = False if self._use_content else self._cmptimestamps(st2, st1)
+                need_upd = False if self._use_content else self._cmptimestamps(
+                    st2, st1)
                 if need_upd:
                     if self._verbose:
                         # target to source
@@ -610,9 +637,11 @@ class Syncer(object):
         if self._numnewdirs:
             self.log('%d directories were created.' % self._numnewdirs)
         if self._numcontupdates:
-            self.log('%d files were updated by content.' % self._numcontupdates)
+            self.log('%d files were updated by content.' %
+                     self._numcontupdates)
         if self._numtimeupdates:
-            self.log('%d files were updated by timestamp.' % self._numtimeupdates)
+            self.log('%d files were updated by timestamp.' %
+                     self._numtimeupdates)
 
         # Failure stats
         self.log('')

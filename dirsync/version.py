@@ -3,6 +3,7 @@ Project versionning info
 """
 
 import subprocess
+import os
 
 __pkg_name__ = 'dirsync'
 
@@ -30,10 +31,13 @@ def get_version(version=__version_info__):
 
 def get_git_chgset():
     try:
-        return subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD'],
-                                       universal_newlines=True).strip()[:-1]
-    except:
-        return '?'
+        gitpath = os.path.join(os.getcwd(), ".git")
+        if os.path.exists(gitpath):
+            return subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD'],
+                                           universal_newlines=True).strip()[:-1]
+    except Exception as e:
+        return str(e)
+    return '?'
 
 
 __version__ = get_version()
