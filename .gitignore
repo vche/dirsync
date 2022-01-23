@@ -26,3 +26,5 @@ tests/.coverage
 *.log
 
 pyvenv
+tsrc
+ttgt
